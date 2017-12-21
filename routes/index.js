@@ -8,8 +8,10 @@ router.get('/', ( req,res ) => {
 
 router.post('/signup', auth.signup)
 router.post('/login', auth.login)
-//router.use(auth.authenticate)
-//Requires Authenticated User
 
+//Requires Authenticated User
+router.use(auth.authenticate)
+router.get('/files', user.getfiles)
+router.post('/upload', user.uploadfile)
 
 module.exports = router;
