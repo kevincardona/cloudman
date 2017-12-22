@@ -12,12 +12,6 @@ app = Flask(__name__)
 
 # END OF IMPORTS + GLOBALS
 
-def requires_auth(request):
-    token = request.form['token']
-    if (authenticate(token) == False):
-        res = { "success": False, "message": "Invalid token" }
-        return json.dumps(res)
-
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -28,12 +22,10 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-
 @app.route("/", methods=['GET', 'POST'])
 def index ():
     test()
     return "Connected to " + server_config.SERVER_IP + "!"
-
 
 # TODO: Limit username/password character use + create user storage folder
 @app.route("/signup", methods=['POST'])
@@ -42,11 +34,13 @@ def signup():
     password = request.form['password']
     return asignup(username, password)
 
+
 @app.route("/login", methods=['POST'])
 def login():
     username = request.form['username']
     password = request.form['password']
     return alogin(username, password)
+
 
 @app.route("/file", methods=['POST'])
 @requires_auth
