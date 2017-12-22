@@ -1,20 +1,16 @@
 from gevent import monkey
 monkey.patch_all()
-
-import jwt
-import json
-import sys
-import requests
-import server_config
-
+import jwt, json, requests, glob, os, server_config, sys
+sys.path.append('routes/')
 from flask import Flask, request, send_file
 from gevent import wsgi
+from werkzeug.utils import secure_filename
 from functools import wraps
-
-sys.path.append('routes/')
 from auth import asignup, alogin, authenticate
 
 app = Flask(__name__)
+
+# END OF IMPORTS + GLOBALS
 
 def requires_auth(request):
     token = request.form['token']
@@ -55,21 +51,67 @@ def login():
 @app.route("/file", methods=['POST'])
 @requires_auth
 def files():
-    token = request.form['token']
-    decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
-    user_dir = "storage/" + decoded['username'] + "/"
+    try:
+        token = request.form['token']
+        decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
+        user_dir = "storage/" + decoded['username'] + "/"
+        filename = user_dir + request.form['filename']
+        return send_file(filename)
+    except Exception:
+        res = { "success": False, "message": "failed to send file" }
+        return json.dumps(res)
 
-    filename = user_dir + request.form['filename']
-    return send_file(filename)
 
+#  TODO: clarify cur_dirs filtering capabilities
 @app.route("/ls", methods=['POST'])
+@requires_auth
 def ls():
-    print "ls"
+    try:
+        token = request.form['token']
+        decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
+        user_dir = "storage/" + decoded['username'] + "/"
+        current_dir = user_dir + request.form['cur_dir'] + "*"
+    except Exception:
+        res = { "success": False, "message": "failed to ls" }
+        return json.dumps(res)
+    return json.dumps(glob.glob(current_dir))
 
 
 @app.route("/mkdir", methods=['POST'])
+@requires_auth
 def mkdir():
-    print "mkdir"
+    try:
+        token = request.form['token']
+        decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
+        user_dir = "storage/" + decoded['username'] + "/"
+        new_dir = user_dir + request.form['new_dir']
+        if not os.path.exists(new_dir):
+            os.makedirs(new_dir)
+    except Exception:
+        res = { "success": False, "message": "failed to mkdir" }
+        return json.dumps(res)
+
+    res = { "success": True, "message": "successfully created new directories" }
+    return json.dumps(res)
+
+@app.route("/upload", methods=['POST'])
+@requires_auth
+def upload():
+    try:
+        token = request.form['token']
+        decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
+        user_dir = "storage/" + decoded['username'] + "/"
+        cur_dir = user_dir + request.form['cur_dir']
+        file = request.files['file']
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(cur_dir, filename))
+    except Exception:
+        print "Unexpected error:", sys.exc_info()[0]
+        res = { "success": False, "message": "failed to upload file" }
+        return json.dumps(res)
+
+    res = { "success": True, "message": "successfully uploaded file!" }
+    return json.dumps(res)
 
 
 server = wsgi.WSGIServer((server_config.SERVER_IP, server_config.SERVER_PORT), app)
