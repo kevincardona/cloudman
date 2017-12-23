@@ -2,13 +2,15 @@ from gevent import monkey
 monkey.patch_all()
 import jwt, json, requests, glob, os, server_config, sys
 sys.path.append('routes/')
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, Response
 from gevent import wsgi
 from werkzeug.utils import secure_filename
 from functools import wraps
 from auth import asignup, alogin, authenticate
-
+from flask_cors import CORS, cross_origin
 app = Flask(__name__)
+cors = CORS(app)
+app.config['CORS_HEADERS'] = 'Content-Type'
 
 # END OF IMPORTS + GLOBALS
 
@@ -17,15 +19,15 @@ def requires_auth(f):
     def decorated(*args, **kwargs):
         token = request.form['token']
         if (authenticate(token) == False):
-            res = { "success": False, "message": "Invalid token" }
+            res = { 'success': False, 'message': 'Invalid token' }
             return json.dumps(res)
         return f(*args, **kwargs)
     return decorated
 
 @app.route("/", methods=['GET', 'POST'])
 def index ():
-    test()
-    return "Connected to " + server_config.SERVER_IP + "!"
+    res = json.dumps({'a':'b'})
+    return Response(res, status=200, mimetype='application/json')
 
 # TODO: Limit username/password character use + create user storage folder
 @app.route("/signup", methods=['POST'])
@@ -37,9 +39,14 @@ def signup():
 
 @app.route("/login", methods=['POST'])
 def login():
-    username = request.form['username']
-    password = request.form['password']
-    return alogin(username, password)
+    try:
+        req = json.dumps(request.get_data())
+        print req.username
+        return alogin(request.form['credentials'], request.form['credentials'])
+    except Exception:
+        print "Unexpected error:", sys.exc_info()[0]
+    res = json.dumps({'success': False, 'message': 'Bad request error!'})
+    return Response(res, status=200, mimetype='application/json')
 
 
 @app.route("/file", methods=['POST'])
@@ -52,7 +59,7 @@ def files():
         filename = user_dir + request.form['filename']
         return send_file(filename)
     except Exception:
-        res = { "success": False, "message": "failed to send file" }
+        res = { 'success': False, 'message': 'failed to send file' }
         return json.dumps(res)
 
 

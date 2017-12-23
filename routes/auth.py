@@ -3,6 +3,7 @@ import json
 import bcrypt
 import server_config
 from datetime import datetime, timedelta
+from flask import Response
 
 
 def asignup(username, password):
@@ -25,20 +26,27 @@ def asignup(username, password):
 
 
 def alogin(username, password):
-    file = json.load(open('users.json'))
-    for user in file["users"]:
-        if (user['username'] == username):
-            upass = user['password']
-            if (bcrypt.hashpw(password.encode('utf-8'), upass.encode('utf-8'))) == user['password']:
-                token_items = {
-                    'username': user['username'],
-                    'exp': datetime.utcnow() + timedelta(seconds=server_config.JWT_EXP_SECONDS)
-                }
-                token = jwt.encode(token_items, server_config.JWT_SECRET, server_config.JWT_ALGORITHM)
-                res = { "success": True, "message": "Successfully logged in!", "token": token }
-                return json.dumps(res)
-    res = { "success": False, "message": "Invalid login information" }
-    return json.dumps(res)
+    try:
+        file = json.load(open('users.json'))
+        for user in file["users"]:
+            if (user['username'] == username):
+                upass = user['password']
+                if (bcrypt.hashpw(password.encode('utf-8'), upass.encode('utf-8'))) == user['password']:
+                    token_items = {
+                        'username': user['username'],
+                        'exp': datetime.utcnow() + timedelta(seconds=server_config.JWT_EXP_SECONDS)
+                    }
+                    token = jwt.encode(token_items, server_config.JWT_SECRET, server_config.JWT_ALGORITHM)
+                    res = json.dumps({ 'success': True, 'message': 'Successfully logged in!', 'token': token })
+                    print 'success'
+                    return Response(res, status=200, mimetype='application/json')
+        res = json.dumps({ 'success': False, 'message': 'Invalid login information' })
+        print 'success'
+        return Response(res, status=200, mimetype='application/json')
+    except Exception:
+        print 'error'
+        res = json.dumps({ 'success': False, 'message': 'Error logging in' })
+        return Response(res, status=201, mimetype='application/json')
 
 def authenticate(token):
     try:
