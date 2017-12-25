@@ -14,10 +14,12 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 
 # END OF IMPORTS + GLOBALS
 
+
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.form['token']
+        token = request.headers.get('token')
+        print token
         if (authenticate(token) == False):
             res = { 'success': False, 'message': 'Invalid token' }
             return json.dumps(res)
@@ -32,19 +34,28 @@ def index ():
 # TODO: Limit username/password character use + create user storage folder
 @app.route("/signup", methods=['POST'])
 def signup():
-    username = request.form['username']
-    password = request.form['password']
+    req = request.get_json()
+    username = req['username']
+    password = req['password']
     return asignup(username, password)
 
 
 @app.route("/login", methods=['POST'])
 def login():
     try:
-        req = json.dumps(request.get_data())
-        print req.username
-        return alogin(request.form['credentials'], request.form['credentials'])
+        raw = request.get_data()
+        print raw
+        req = request.get_json()
+        return alogin(req['username'], req['password'])
     except Exception:
-        print "Unexpected error:", sys.exc_info()[0]
+        try:
+            print "FORM DATA BOI"
+            print request.form['username']
+            return alogin(request.form['username'], request.form['password'])
+        except Exception:
+            print "FAIL BOI"
+            res = json.dumps({'success': False, 'message': 'Error!'})
+            return Response(res, status=200, mimetype='application/json')
     res = json.dumps({'success': False, 'message': 'Bad request error!'})
     return Response(res, status=200, mimetype='application/json')
 
@@ -68,14 +79,27 @@ def files():
 @requires_auth
 def ls():
     try:
-        token = request.form['token']
+        token = request.headers.get('token')
         decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
         user_dir = "storage/" + decoded['username'] + "/"
         current_dir = user_dir + request.form['cur_dir'] + "*"
     except Exception:
+        print "Unexpected error:", sys.exc_info()[0]
         res = { "success": False, "message": "failed to ls" }
         return json.dumps(res)
-    return json.dumps(glob.glob(current_dir))
+    files = []
+    directories = []
+    dir =  glob.glob(current_dir)
+    count = 0
+    while count < len(dir):
+        print dir
+        if os.path.isdir(dir[count]) :
+            directories.append(dir[count])
+        else:
+            files.append(dir[count])
+        count += 1
+    res = { "success": True , "files": files, "directories": directories }
+    return json.dumps(res)
 
 
 @app.route("/mkdir", methods=['POST'])
@@ -107,7 +131,6 @@ def upload():
         filename = secure_filename(file.filename)
         file.save(os.path.join(cur_dir, filename))
     except Exception:
-        print "Unexpected error:", sys.exc_info()[0]
         res = { "success": False, "message": "failed to upload file" }
         return json.dumps(res)
 
