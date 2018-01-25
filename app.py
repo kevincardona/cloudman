@@ -2,13 +2,13 @@ from gevent import monkey
 monkey.patch_all()
 import jwt, json, requests, glob, os, server_config, sys
 sys.path.append('routes/')
-from flask import Flask, request, send_file, Response
+from flask import Flask, request, send_file, Response, render_template, send_from_directory
 from gevent import wsgi
 from werkzeug.utils import secure_filename
 from functools import wraps
 from auth import asignup, alogin, authenticate
 from flask_cors import CORS, cross_origin
-app = Flask(__name__)
+app = Flask(__name__, template_folder='', static_url_path='/static')
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 
@@ -26,10 +26,11 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-@app.route("/", methods=['GET', 'POST'])
-def index ():
-    res = json.dumps({'a':'b'})
-    return Response(res, status=200, mimetype='application/json')
+@app.route('/', methods=['POST', 'GET'])
+def root():
+    res = { 'success': True, 'message': 'Welcome to Cloudman' }
+    return json.dumps(res)
+
 
 # TODO: Limit username/password character use + create user storage folder
 @app.route("/signup", methods=['POST'])
@@ -64,12 +65,13 @@ def login():
 @requires_auth
 def files():
     try:
-        token = request.form['token']
+        token = request.headers.get('token')
         decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
-        user_dir = "storage/" + decoded['username'] + "/"
+        user_dir = "static/" + decoded['username'] + "/" + request.form['cur_dir']
         filename = user_dir + request.form['filename']
         return send_file(filename)
     except Exception:
+        print "Unexpected error:", sys.exc_info()[0]
         res = { 'success': False, 'message': 'failed to send file' }
         return json.dumps(res)
 
@@ -81,7 +83,7 @@ def ls():
     try:
         token = request.headers.get('token')
         decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
-        user_dir = "storage/" + decoded['username'] + "/"
+        user_dir = "static/" + decoded['username'] + "/"
         current_dir = user_dir + request.form['cur_dir'] + "*"
     except Exception:
         print "Unexpected error:", sys.exc_info()[0]
@@ -92,11 +94,12 @@ def ls():
     dir =  glob.glob(current_dir)
     count = 0
     while count < len(dir):
+        temp = dir[count].replace(("static/" + decoded['username'] + "/" + request.form['cur_dir']), "")
         print dir
         if os.path.isdir(dir[count]) :
-            directories.append(dir[count])
+            directories.append(temp)
         else:
-            files.append(dir[count])
+            files.append(temp)
         count += 1
     res = { "success": True , "files": files, "directories": directories }
     return json.dumps(res)
@@ -108,7 +111,7 @@ def mkdir():
     try:
         token = request.form['token']
         decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
-        user_dir = "storage/" + decoded['username'] + "/"
+        user_dir = "static/" + decoded['username'] + "/"
         new_dir = user_dir + request.form['new_dir']
         if not os.path.exists(new_dir):
             os.makedirs(new_dir)
@@ -125,7 +128,7 @@ def upload():
     try:
         token = request.form['token']
         decoded = jwt.decode(token, server_config.JWT_SECRET, server_config.JWT_ALGORITHM )
-        user_dir = "storage/" + decoded['username'] + "/"
+        user_dir = "static/" + decoded['username'] + "/"
         cur_dir = user_dir + request.form['cur_dir']
         file = request.files['file']
         filename = secure_filename(file.filename)
